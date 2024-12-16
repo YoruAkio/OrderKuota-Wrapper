@@ -1,0 +1,36 @@
+{
+  "name": "orderkuota",
+  "version": "1.0.7",
+  "description": "OrderKuota API wrapper for Node.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "publish-package": "npm run build && npm pack && npm publish"
+  },
+  "license": "MIT",
+  "author": "YoruAkio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YoruAkio/OrderKuota-Wrapper"
+  },
+  "keywords": [
+    "orderkuota",
+    "orderkuota-wrapper",
+    "orderkuota-api",
+    "api",
+    "wrapper",
+    "typescript"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.7.9"
+  }
+}
