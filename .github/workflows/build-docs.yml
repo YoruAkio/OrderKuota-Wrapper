@@ -27,14 +27,22 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Generate HTML documentation
-        run: bun run docs:generate
+      - name: Clean docs directory
+        run: rm -rf docs && mkdir -p docs
+
+      - name: Generate TypeDoc documentation
+        run: bun run typedoc --out docs src
+
+      - name: Copy README to docs
+        run: cp README.md docs/
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-          publish_branch: gh-pages
-          force_orphan: true
-          clean: true
+        run: |
+          git add docs
+          git commit -m "Update documentation [skip ci]" || exit 0
+          git subtree push
