@@ -13,8 +13,7 @@
     "build": "tsc",
     "prepare": "bun run build",
     "package:publish": "bun run build && bun pack && bun publish",
-    "docs:generate:markdown": "bunx typedoc --options typedoc.json",
-    "docs:generate:html": "bunx typedoc --options typedoc.html.json"
+    "docs:generate": "typedoc --out docs"
   },
   "license": "MIT",
   "author": "YoruAkio",
