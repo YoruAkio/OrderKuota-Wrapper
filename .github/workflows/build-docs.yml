@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload artifact for GitHub Pages
         # Uploads the prepared 'docs' directory to GitHub Pages
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
           # This path MUST match the 'TARGET_HTML_DIR' from the previous step
           path: './docs'
@@ -117,8 +117,17 @@ jobs:
           fi
 
           # Create or switch to the target branch (doc-hashnode)
-          git fetch origin "$TARGET_BRANCH":"$TARGET_BRANCH" || git checkout --orphan "$TARGET_BRANCH"
-          git checkout "$TARGET_BRANCH"
+          if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+            # Branch exists on remote, fetch and checkout
+            git fetch origin "$TARGET_BRANCH"
+            git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+          elif git show-ref --verify --quiet "refs/heads/$TARGET_BRANCH"; then
+            # Branch exists locally, checkout
+            git checkout "$TARGET_BRANCH"
+          else
+            # Branch doesn't exist, create orphan branch
+            git checkout --orphan "$TARGET_BRANCH"
+          fi
 
           # Remove all existing files on the doc-hashnode branch to ensure a clean update
           git rm -rf .
