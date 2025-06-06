@@ -1,16 +1,19 @@
 {
   "name": "orderkuota",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "OrderKuota API wrapper for Node.js",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsc",
     "prepare": "npm run build",
-    "publish-package": "npm run build && npm pack && npm publish"
+    "publish-package": "npm run build && npm pack && npm publish",
+    "docs:generate": "npm run typedoc --out docs"
   },
   "license": "MIT",
   "author": "YoruAkio",
@@ -24,13 +27,18 @@
     "orderkuota-api",
     "api",
     "wrapper",
-    "typescript"
+    "typescript",
+    "qris",
+    "qrid-payment"
   ],
   "devDependencies": {
+    "@types/bun": "latest",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "axios": "^1.7.9"
-  }
+    "axios": "^1.7.9",
+    "typedoc": "^0.28.5"
+  },
+  "private": false
 }
