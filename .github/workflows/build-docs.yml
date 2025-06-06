@@ -16,9 +16,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     # Permissions required for GitHub Pages deployment
     permissions:
-      contents: write # To write to the gh-pages branch (if used by deploy-pages)
-      pages: write    # To use the GitHub Pages deployment feature
-      id-token: write # For OIDC authentication with Pages
+      contents: read
+      pages: write
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -135,25 +135,19 @@ jobs:
           # Remove all existing files on the doc-hashnode branch to ensure a clean update
           git rm -rf . 2>/dev/null || true
 
-          # Remove unnecessary files and directories for hashnode docs
-          rm -rf node_modules bun.lockb package-lock.json yarn.lock .git .github src dist generated-temp example typedoc.json typedoc.html.json tsconfig.json LICENSE *.tgz 2>/dev/null || true
-
-          # Create the desired nested directory structure: docs/api-reference
-          mkdir -p docs/api-reference
-          # Copy the *contents* of the generated markdown into docs/api-reference
-          cp -R "$SOURCE_MARKDOWN_DIR"/* docs/api-reference/
+          # Copy only the generated markdown documentation
+          cp -R "$SOURCE_MARKDOWN_DIR"/* .
 
           # Create a simple README for the hashnode docs branch
           cat > README.md << 'EOF'
-# Documentation Branch for Hashnode
-
-This branch contains auto-generated markdown documentation for Hashnode.
-
-The documentation is automatically updated when changes are pushed to the main branch.
-
-## Structure
-- `docs/api-reference/` - Contains the API reference documentation in markdown format
-EOF
+          # Documentation Branch for Hashnode
+          
+          This branch contains auto-generated markdown documentation for Hashnode.
+          
+          The documentation is automatically updated when changes are pushed to the main branch.
+          
+          Generated from the main branch using TypeDoc.
+          EOF
 
           # Stage all changes (add new files, register deletions)
           git add .
