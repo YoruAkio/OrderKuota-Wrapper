@@ -37,7 +37,9 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@types/qrcode": "^1.5.5",
     "axios": "^1.7.9",
+    "qrcode": "^1.5.4",
     "typedoc": "^0.28.5"
   },
   "private": false
