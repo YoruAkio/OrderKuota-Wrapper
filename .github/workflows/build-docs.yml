@@ -18,6 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -48,9 +49,11 @@ jobs:
 
       - name: Deploy to GitHub Pages
         run: |
+          git fetch origin gh-pages || true
           git checkout --orphan gh-pages
-          git rm -rf . --quiet
+          git rm -rf . --quiet || true
           git clean -fxd
           cp -r /tmp/docs-backup/* .
           git add .
           git commit -m "Deploy documentation [skip ci]"
+          git push --force --set-
