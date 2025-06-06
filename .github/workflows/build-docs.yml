@@ -72,19 +72,16 @@ jobs:
             exit 1
           fi
 
-      - name: Install hashnode-cli for publishing
-        run: npm install -g @hashnode/cli
-
       - name: Create publish script
         run: |
           cat > publish-hashnode.js << 'EOF'
           import fs from 'fs';
           import path from 'path';
-          import { execSync } from 'child_process';
           
           const DOCS_DIR = './generated-temp/hashnode-markdown';
+          const HASHNODE_API_URL = 'https://gql.hashnode.com/';
           
-          function publishToHashnode() {
+          async function publishToHashnode() {
             console.log('🔍 Checking for markdown documentation...');
             
             if (!fs.existsSync(DOCS_DIR)) {
@@ -138,39 +135,76 @@ jobs:
               return;
             }
             
-            const filesToPublish = allFiles.slice(0, 5);
-            console.log(`📤 Publishing ${filesToPublish.length} files to Hashnode...`);
+            console.log(`📤 Publishing ${allFiles.length} files to Hashnode...`);
             
-            for (const file of filesToPublish) {
+            async function publishArticle(title, content, subtitle = '') {
+              const mutation = `
+                mutation PublishPost($input: PublishPostInput!) {
+                  publishPost(input: $input) {
+                    post {
+                      id
+                      title
+                      url
+                    }
+                  }
+                }
+              `;
+              
+              const variables = {
+                input: {
+                  title: title,
+                  subtitle: subtitle,
+                  contentMarkdown: content,
+                  tags: [
+                    { slug: "api", name: "API" },
+                    { slug: "documentation", name: "Documentation" },
+                    { slug: "orderkuota", name: "OrderKuota" },
+                    { slug: "nodejs", name: "Node.js" },
+                    { slug: "typescript", name: "TypeScript" }
+                  ],
+                  publicationId: process.env.HASHNODE_PUBLICATION_ID || null,
+                  publishedAt: new Date().toISOString()
+                }
+              };
+              
+              try {
+                const response = await fetch(HASHNODE_API_URL, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': process.env.HASHNODE_PAT
+                  },
+                  body: JSON.stringify({
+                    query: mutation,
+                    variables: variables
+                  })
+                });
+                
+                const result = await response.json();
+                
+                if (result.errors) {
+                  throw new Error(JSON.stringify(result.errors));
+                }
+                
+                return result.data.publishPost.post;
+              } catch (error) {
+                throw new Error(`Failed to publish to Hashnode: ${error.message}`);
+              }
+            }
+            
+            for (const file of allFiles) {
               try {
                 const content = fs.readFileSync(file.fullPath, 'utf8');
                 const fileName = path.basename(file.name, '.md');
                 const title = `OrderKuota API - ${fileName.replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim()}`;
+                const subtitle = 'Auto-generated API documentation for OrderKuota';
                 
                 console.log(`📝 Publishing: ${title}`);
                 
-                const tempFile = `temp_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.md`;
-                const frontMatter = `---
-          title: "${title}"
-          subtitle: "Auto-generated API documentation for OrderKuota"
-          tags: ["api", "documentation", "orderkuota", "nodejs", "typescript"]
-          publishAs: "public"
-          ---
-          
-          ${content}`;
-                
-                fs.writeFileSync(tempFile, frontMatter);
-                
-                execSync(`npx @hashnode/cli publish ${tempFile}`, {
-                  stdio: 'inherit',
-                  env: { ...process.env, HASHNODE_TOKEN: process.env.HASHNODE_PAT }
-                });
+                const post = await publishArticle(title, content, subtitle);
                 
                 console.log(`✅ Successfully published: ${title}`);
-                
-                if (fs.existsSync(tempFile)) {
-                  fs.unlinkSync(tempFile);
-                }
+                console.log(`🔗 URL: ${post.url}`);
                 
               } catch (error) {
                 console.error(`❌ Failed to publish ${file.name}:`, error.message);
@@ -180,13 +214,13 @@ jobs:
             console.log('🎉 Hashnode publishing completed!');
           }
           
-          publishToHashnode();
+          publishToHashnode().catch(console.error);
           EOF
 
       - name: Publish to Hashnode
         env:
           HASHNODE_PAT: ${{ secrets.HASHNODE_PAT }}
-          HASHNODE_TOKEN: ${{ secrets.HASHNODE_PAT }}
+          HASHNODE_PUBLICATION_ID: ${{ secrets.HASHNODE_PUBLICATION_ID }}
         run: |
           if [ -z "$HASHNODE_PAT" ]; then
             echo "⚠️  HASHNODE_PAT secret not found. Skipping Hashnode publishing."
