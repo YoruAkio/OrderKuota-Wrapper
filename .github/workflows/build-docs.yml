@@ -37,6 +37,7 @@ jobs:
           publish_dir: ./generated-temp/github-pages-html
           publish_branch: gh-pages
           force_orphan: true
+          clean: true
 
   deploy-hashnode-docs:
     runs-on: ubuntu-latest
@@ -60,49 +61,16 @@ jobs:
       - name: Generate Markdown documentation
         run: bun run docs:generate:markdown
 
-      - name: Configure Git
+      - name: Check generated documentation
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Deploy to doc-hashnode branch
-        run: |
-          SOURCE_MARKDOWN_DIR="generated-temp/hashnode-markdown"
-          TARGET_BRANCH="doc-hashnode"
-          
-          if [ ! -d "$SOURCE_MARKDOWN_DIR" ] || [ -z "$(ls -A $SOURCE_MARKDOWN_DIR)" ]; then
-            echo "Error: TypeDoc Markdown output directory '$SOURCE_MARKDOWN_DIR' not found or is empty."
+          ls -la generated-temp/
+          if [ -d "generated-temp/hashnode-markdown" ]; then
+            echo "✅ Hashnode markdown directory found"
+            ls -la generated-temp/hashnode-markdown/
+          else
+            echo "❌ Hashnode markdown directory not found"
             exit 1
           fi
-          
-          echo "Creating temporary directory for deployment..."
-          TEMP_DIR=$(mktemp -d)
-          cp -R "$SOURCE_MARKDOWN_DIR"/* "$TEMP_DIR/"
-          
-          echo "# OrderKuota API Documentation for Hashnode" > "$TEMP_DIR/README.md"
-          echo "" >> "$TEMP_DIR/README.md"
-          echo "This branch contains auto-generated markdown documentation for Hashnode publishing." >> "$TEMP_DIR/README.md"
-          echo "Generated on: $(date)" >> "$TEMP_DIR/README.md"
-          
-          git fetch origin || true
-          
-          if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
-            echo "Branch $TARGET_BRANCH exists, updating..."
-            git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH" 2>/dev/null || git checkout --orphan "$TARGET_BRANCH"
-          else
-            echo "Creating new branch $TARGET_BRANCH..."
-            git checkout --orphan "$TARGET_BRANCH"
-          fi
-          
-          git rm -rf . 2>/dev/null || true
-          cp -R "$TEMP_DIR"/* .
-          rm -rf "$TEMP_DIR"
-          
-          git add .
-          git commit -m "Update Hashnode documentation - $(date)" || echo "No changes to commit"
-          git push origin "$TARGET_BRANCH" --force
-          
-          git checkout main
 
       - name: Install hashnode-cli for publishing
         run: npm install -g @hashnode/cli
@@ -114,35 +82,75 @@ jobs:
           import path from 'path';
           import { execSync } from 'child_process';
           
+          const DOCS_DIR = './generated-temp/hashnode-markdown';
+          
           function publishToHashnode() {
-            const docsDir = 'generated-temp/hashnode-markdown';
+            console.log('🔍 Checking for markdown documentation...');
             
-            if (!fs.existsSync(docsDir)) {
-              console.error('Markdown documentation directory not found');
-              return;
+            if (!fs.existsSync(DOCS_DIR)) {
+              console.error('❌ Markdown documentation directory not found at:', DOCS_DIR);
+              console.log('Available directories:');
+              try {
+                const tempDir = './generated-temp';
+                if (fs.existsSync(tempDir)) {
+                  fs.readdirSync(tempDir).forEach(item => {
+                    console.log('  -', item);
+                  });
+                } else {
+                  console.log('  generated-temp directory does not exist');
+                }
+              } catch (e) {
+                console.log('  Unable to list directories');
+              }
+              process.exit(1);
             }
             
-            const files = fs.readdirSync(docsDir, { recursive: true })
-              .filter(f => typeof f === 'string' && f.endsWith('.md') && !f.includes('README.md'))
-              .slice(0, 5);
+            console.log('✅ Found documentation directory');
             
-            console.log(`Found ${files.length} markdown files to publish`);
+            let allFiles = [];
+            function findMarkdownFiles(dir, relativePath = '') {
+              const items = fs.readdirSync(dir, { withFileTypes: true });
+              for (const item of items) {
+                const fullPath = path.join(dir, item.name);
+                const relPath = path.join(relativePath, item.name);
+                
+                if (item.isDirectory()) {
+                  findMarkdownFiles(fullPath, relPath);
+                } else if (item.name.endsWith('.md') && !item.name.includes('README')) {
+                  allFiles.push({ fullPath, relPath, name: item.name });
+                }
+              }
+            }
+            
+            findMarkdownFiles(DOCS_DIR);
+            
+            console.log(`📄 Found ${allFiles.length} markdown files`);
+            
+            if (allFiles.length === 0) {
+              console.log('⚠️  No markdown files found to publish');
+              return;
+            }
             
             if (!process.env.HASHNODE_PAT) {
               console.log('⚠️  HASHNODE_PAT not available, skipping publish');
+              console.log('Available files that would be published:');
+              allFiles.forEach(file => console.log(`  - ${file.relPath}`));
               return;
             }
             
-            for (const file of files) {
-              const filePath = path.join(docsDir, file);
-              const content = fs.readFileSync(filePath, 'utf8');
-              const fileName = path.basename(file, '.md');
-              const title = `OrderKuota API - ${fileName.replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim()}`;
-              
-              console.log(`Publishing: ${title}`);
-              
-              const tempFile = `temp_${fileName}.md`;
-              const frontMatter = `---
+            const filesToPublish = allFiles.slice(0, 5);
+            console.log(`📤 Publishing ${filesToPublish.length} files to Hashnode...`);
+            
+            for (const file of filesToPublish) {
+              try {
+                const content = fs.readFileSync(file.fullPath, 'utf8');
+                const fileName = path.basename(file.name, '.md');
+                const title = `OrderKuota API - ${fileName.replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim()}`;
+                
+                console.log(`📝 Publishing: ${title}`);
+                
+                const tempFile = `temp_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.md`;
+                const frontMatter = `---
           title: "${title}"
           subtitle: "Auto-generated API documentation for OrderKuota"
           tags: ["api", "documentation", "orderkuota", "nodejs", "typescript"]
@@ -150,23 +158,26 @@ jobs:
           ---
           
           ${content}`;
-              
-              fs.writeFileSync(tempFile, frontMatter);
-              
-              try {
+                
+                fs.writeFileSync(tempFile, frontMatter);
+                
                 execSync(`npx @hashnode/cli publish ${tempFile}`, {
                   stdio: 'inherit',
                   env: { ...process.env, HASHNODE_TOKEN: process.env.HASHNODE_PAT }
                 });
-                console.log(`✅ Published: ${title}`);
-              } catch (error) {
-                console.error(`❌ Failed to publish ${title}:`, error.message);
-              } finally {
+                
+                console.log(`✅ Successfully published: ${title}`);
+                
                 if (fs.existsSync(tempFile)) {
                   fs.unlinkSync(tempFile);
                 }
+                
+              } catch (error) {
+                console.error(`❌ Failed to publish ${file.name}:`, error.message);
               }
             }
+            
+            console.log('🎉 Hashnode publishing completed!');
           }
           
           publishToHashnode();
@@ -179,6 +190,8 @@ jobs:
         run: |
           if [ -z "$HASHNODE_PAT" ]; then
             echo "⚠️  HASHNODE_PAT secret not found. Skipping Hashnode publishing."
+            echo "🚀 Running dry run to show what would be published..."
+            bun run publish-hashnode.js
             exit 0
           fi
           
