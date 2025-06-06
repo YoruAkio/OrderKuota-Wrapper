@@ -12,9 +12,6 @@ jobs:
       contents: write
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -33,12 +30,13 @@ jobs:
       - name: Generate HTML documentation
         run: bun run docs:generate:html
 
-      - name: Deploy to gh-pages using peaceiris action
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./generated-temp/github-pages-html
           publish_branch: gh-pages
+          force_orphan: true
 
   deploy-hashnode-docs:
     runs-on: ubuntu-latest
@@ -67,11 +65,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Stash changes and prepare for branch switch
-        run: |
-          git add .
-          git stash push -m "Stash changes before branch switch" || echo "Nothing to stash"
-
       - name: Deploy to doc-hashnode branch
         run: |
           SOURCE_MARKDOWN_DIR="generated-temp/hashnode-markdown"
@@ -82,44 +75,46 @@ jobs:
             exit 1
           fi
           
+          echo "Creating temporary directory for deployment..."
+          TEMP_DIR=$(mktemp -d)
+          cp -R "$SOURCE_MARKDOWN_DIR"/* "$TEMP_DIR/"
+          
+          echo "# OrderKuota API Documentation for Hashnode" > "$TEMP_DIR/README.md"
+          echo "" >> "$TEMP_DIR/README.md"
+          echo "This branch contains auto-generated markdown documentation for Hashnode publishing." >> "$TEMP_DIR/README.md"
+          echo "Generated on: $(date)" >> "$TEMP_DIR/README.md"
+          
+          git fetch origin || true
+          
           if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
-            git fetch origin "$TARGET_BRANCH"
-            git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+            echo "Branch $TARGET_BRANCH exists, updating..."
+            git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH" 2>/dev/null || git checkout --orphan "$TARGET_BRANCH"
           else
+            echo "Creating new branch $TARGET_BRANCH..."
             git checkout --orphan "$TARGET_BRANCH"
           fi
           
           git rm -rf . 2>/dev/null || true
-          cp -R "$SOURCE_MARKDOWN_DIR"/* .
-          
-          echo "# OrderKuota API Documentation for Hashnode" > README.md
-          echo "" >> README.md
-          echo "This branch contains auto-generated markdown documentation for Hashnode publishing." >> README.md
-          echo "Generated on: $(date)" >> README.md
+          cp -R "$TEMP_DIR"/* .
+          rm -rf "$TEMP_DIR"
           
           git add .
           git commit -m "Update Hashnode documentation - $(date)" || echo "No changes to commit"
           git push origin "$TARGET_BRANCH" --force
-
-      - name: Checkout main branch and restore changes
-        run: |
+          
           git checkout main
-          git stash pop || echo "No stash to pop"
 
       - name: Install hashnode-cli for publishing
-        run: bun add -g @hashnode/cli
+        run: npm install -g @hashnode/cli
 
       - name: Create publish script
         run: |
           cat > publish-hashnode.js << 'EOF'
           import fs from 'fs';
           import path from 'path';
-          import { exec } from 'child_process';
-          import { promisify } from 'util';
+          import { execSync } from 'child_process';
           
-          const execAsync = promisify(exec);
-          
-          async function publishToHashnode() {
+          function publishToHashnode() {
             const docsDir = 'generated-temp/hashnode-markdown';
             
             if (!fs.existsSync(docsDir)) {
@@ -127,20 +122,29 @@ jobs:
               return;
             }
             
-            const files = fs.readdirSync(docsDir).filter(f => f.endsWith('.md') && f !== 'README.md');
+            const files = fs.readdirSync(docsDir, { recursive: true })
+              .filter(f => typeof f === 'string' && f.endsWith('.md') && !f.includes('README.md'))
+              .slice(0, 5);
+            
             console.log(`Found ${files.length} markdown files to publish`);
+            
+            if (!process.env.HASHNODE_PAT) {
+              console.log('⚠️  HASHNODE_PAT not available, skipping publish');
+              return;
+            }
             
             for (const file of files) {
               const filePath = path.join(docsDir, file);
               const content = fs.readFileSync(filePath, 'utf8');
-              const title = `OrderKuota API - ${file.replace('.md', '').replace(/-/g, ' ')}`;
+              const fileName = path.basename(file, '.md');
+              const title = `OrderKuota API - ${fileName.replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim()}`;
               
               console.log(`Publishing: ${title}`);
               
-              const tempFile = `temp_${file}`;
+              const tempFile = `temp_${fileName}.md`;
               const frontMatter = `---
           title: "${title}"
-          subtitle: "Auto-generated API documentation"
+          subtitle: "Auto-generated API documentation for OrderKuota"
           tags: ["api", "documentation", "orderkuota", "nodejs", "typescript"]
           publishAs: "public"
           ---
@@ -150,20 +154,22 @@ jobs:
               fs.writeFileSync(tempFile, frontMatter);
               
               try {
-                const { stdout, stderr } = await execAsync(`hashnode publish ${tempFile}`, {
+                execSync(`npx @hashnode/cli publish ${tempFile}`, {
+                  stdio: 'inherit',
                   env: { ...process.env, HASHNODE_TOKEN: process.env.HASHNODE_PAT }
                 });
                 console.log(`✅ Published: ${title}`);
-                console.log(stdout);
               } catch (error) {
                 console.error(`❌ Failed to publish ${title}:`, error.message);
               } finally {
-                fs.unlinkSync(tempFile);
+                if (fs.existsSync(tempFile)) {
+                  fs.unlinkSync(tempFile);
+                }
               }
             }
           }
           
-          publishToHashnode().catch(console.error);
+          publishToHashnode();
           EOF
 
       - name: Publish to Hashnode
