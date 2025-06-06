@@ -135,6 +135,14 @@ jobs:
               return;
             }
             
+            if (!process.env.HASHNODE_PUBLICATION_ID) {
+              console.log('⚠️  HASHNODE_PUBLICATION_ID not available, skipping publish');
+              console.log('💡 Set HASHNODE_PUBLICATION_ID secret to enable Hashnode publishing');
+              console.log('Available files that would be published:');
+              allFiles.forEach(file => console.log(`  - ${file.relPath}`));
+              return;
+            }
+            
             console.log(`📤 Publishing ${allFiles.length} files to Hashnode...`);
             
             async function publishArticle(title, content, subtitle = '') {
@@ -162,7 +170,7 @@ jobs:
                     { slug: "nodejs", name: "Node.js" },
                     { slug: "typescript", name: "TypeScript" }
                   ],
-                  publicationId: process.env.HASHNODE_PUBLICATION_ID || null,
+                  publicationId: process.env.HASHNODE_PUBLICATION_ID,
                   publishedAt: new Date().toISOString()
                 }
               };
@@ -183,6 +191,10 @@ jobs:
                 const result = await response.json();
                 
                 if (result.errors) {
+                  console.error('❌ Hashnode API Error:', JSON.stringify(result.errors, null, 2));
+                  if (result.errors.some(err => err.message.includes('publicationId'))) {
+                    throw new Error('Invalid or missing HASHNODE_PUBLICATION_ID. Please check your publication ID in repository secrets.');
+                  }
                   throw new Error(JSON.stringify(result.errors));
                 }
                 
@@ -224,6 +236,14 @@ jobs:
         run: |
           if [ -z "$HASHNODE_PAT" ]; then
             echo "⚠️  HASHNODE_PAT secret not found. Skipping Hashnode publishing."
+            echo "🚀 Running dry run to show what would be published..."
+            bun run publish-hashnode.js
+            exit 0
+          fi
+          
+          if [ -z "$HASHNODE_PUBLICATION_ID" ]; then
+            echo "⚠️  HASHNODE_PUBLICATION_ID secret not found. Skipping Hashnode publishing."
+            echo "💡 Set HASHNODE_PUBLICATION_ID secret to enable Hashnode publishing"
             echo "🚀 Running dry run to show what would be published..."
             bun run publish-hashnode.js
             exit 0
