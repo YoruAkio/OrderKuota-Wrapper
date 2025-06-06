@@ -36,6 +36,11 @@ jobs:
       - name: Copy README to docs
         run: cp README.md docs/
 
+      - name: Store docs content
+        run: |
+          mkdir -p /tmp/docs-backup
+          cp -r docs/* /tmp/docs-backup/
+
       - name: Configure Git
         run: |
           git config --global user.name 'github-actions[bot]'
@@ -46,6 +51,6 @@ jobs:
           git checkout --orphan gh-pages
           git rm -rf . --quiet
           git clean -fxd
-          cp -r docs/* .
+          cp -r /tmp/docs-backup/* .
           git add .
           git commit -m "Deploy documentation [skip ci]"
