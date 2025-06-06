@@ -13,6 +13,11 @@ lerna-debug.log*
 # Documentation from typedoc
 docs/
 
+# Generated documentation directories
+generated-temp/
+temp_*.md
+publish-hashnode.js
+
 # Output
 opt/
 

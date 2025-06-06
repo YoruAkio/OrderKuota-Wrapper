@@ -3,8 +3,6 @@ name: Deploy Documentation
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -12,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -30,33 +33,12 @@ jobs:
       - name: Generate HTML documentation
         run: bun run docs:generate:html
 
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Deploy to gh-pages branch
-        run: |
-          SOURCE_HTML_DIR="generated-temp/github-pages-html"
-          TARGET_BRANCH="gh-pages"
-          
-          if [ ! -d "$SOURCE_HTML_DIR" ] || [ -z "$(ls -A $SOURCE_HTML_DIR)" ]; then
-            echo "Error: TypeDoc HTML output directory '$SOURCE_HTML_DIR' not found or is empty."
-            exit 1
-          fi
-          
-          if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
-            git fetch origin "$TARGET_BRANCH"
-            git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
-          else
-            git checkout --orphan "$TARGET_BRANCH"
-          fi
-          
-          git rm -rf . 2>/dev/null || true
-          cp -R "$SOURCE_HTML_DIR"/* .
-          git add .
-          git commit -m "Deploy documentation to gh-pages" || echo "No changes to commit"
-          git push origin "$TARGET_BRANCH" --force
+      - name: Deploy to gh-pages using peaceiris action
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./generated-temp/github-pages-html
+          publish_branch: gh-pages
 
   deploy-hashnode-docs:
     runs-on: ubuntu-latest
@@ -85,6 +67,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Stash changes and prepare for branch switch
+        run: |
+          git add .
+          git stash push -m "Stash changes before branch switch" || echo "Nothing to stash"
+
       - name: Deploy to doc-hashnode branch
         run: |
           SOURCE_MARKDOWN_DIR="generated-temp/hashnode-markdown"
@@ -105,53 +92,89 @@ jobs:
           git rm -rf . 2>/dev/null || true
           cp -R "$SOURCE_MARKDOWN_DIR"/* .
           
-          cat > README.md << 'EOF'
-          # Documentation Branch for Hashnode
-          
-          This branch contains auto-generated markdown documentation for Hashnode.
-          EOF
+          echo "# OrderKuota API Documentation for Hashnode" > README.md
+          echo "" >> README.md
+          echo "This branch contains auto-generated markdown documentation for Hashnode publishing." >> README.md
+          echo "Generated on: $(date)" >> README.md
           
           git add .
-          git commit -m "Update Hashnode documentation" || echo "No changes to commit"
+          git commit -m "Update Hashnode documentation - $(date)" || echo "No changes to commit"
           git push origin "$TARGET_BRANCH" --force
 
-      - name: Install hashnode-publish
-        run: bun add hashnode-publish
+      - name: Checkout main branch and restore changes
+        run: |
+          git checkout main
+          git stash pop || echo "No stash to pop"
+
+      - name: Install hashnode-cli for publishing
+        run: bun add -g @hashnode/cli
+
+      - name: Create publish script
+        run: |
+          cat > publish-hashnode.js << 'EOF'
+          import fs from 'fs';
+          import path from 'path';
+          import { exec } from 'child_process';
+          import { promisify } from 'util';
+          
+          const execAsync = promisify(exec);
+          
+          async function publishToHashnode() {
+            const docsDir = 'generated-temp/hashnode-markdown';
+            
+            if (!fs.existsSync(docsDir)) {
+              console.error('Markdown documentation directory not found');
+              return;
+            }
+            
+            const files = fs.readdirSync(docsDir).filter(f => f.endsWith('.md') && f !== 'README.md');
+            console.log(`Found ${files.length} markdown files to publish`);
+            
+            for (const file of files) {
+              const filePath = path.join(docsDir, file);
+              const content = fs.readFileSync(filePath, 'utf8');
+              const title = `OrderKuota API - ${file.replace('.md', '').replace(/-/g, ' ')}`;
+              
+              console.log(`Publishing: ${title}`);
+              
+              const tempFile = `temp_${file}`;
+              const frontMatter = `---
+          title: "${title}"
+          subtitle: "Auto-generated API documentation"
+          tags: ["api", "documentation", "orderkuota", "nodejs", "typescript"]
+          publishAs: "public"
+          ---
+          
+          ${content}`;
+              
+              fs.writeFileSync(tempFile, frontMatter);
+              
+              try {
+                const { stdout, stderr } = await execAsync(`hashnode publish ${tempFile}`, {
+                  env: { ...process.env, HASHNODE_TOKEN: process.env.HASHNODE_PAT }
+                });
+                console.log(`✅ Published: ${title}`);
+                console.log(stdout);
+              } catch (error) {
+                console.error(`❌ Failed to publish ${title}:`, error.message);
+              } finally {
+                fs.unlinkSync(tempFile);
+              }
+            }
+          }
+          
+          publishToHashnode().catch(console.error);
+          EOF
 
       - name: Publish to Hashnode
         env:
           HASHNODE_PAT: ${{ secrets.HASHNODE_PAT }}
+          HASHNODE_TOKEN: ${{ secrets.HASHNODE_PAT }}
         run: |
-          SOURCE_MARKDOWN_DIR="generated-temp/hashnode-markdown"
+          if [ -z "$HASHNODE_PAT" ]; then
+            echo "⚠️  HASHNODE_PAT secret not found. Skipping Hashnode publishing."
+            exit 0
+          fi
           
-          # Create a simple publish script
-          cat > publish-hashnode.js << 'EOF'
-          import { HashnodePublisher } from 'hashnode-publish';
-          import { readFileSync, readdirSync } from 'fs';
-          import { join } from 'path';
-          
-          const publisher = new HashnodePublisher({
-            token: process.env.HASHNODE_PAT
-          });
-          
-          const docsDir = process.argv[2] || 'generated-temp/hashnode-markdown';
-          const files = readdirSync(docsDir).filter(f => f.endsWith('.md'));
-          
-          for (const file of files) {
-            const content = readFileSync(join(docsDir, file), 'utf8');
-            const title = file.replace('.md', '').replace(/-/g, ' ');
-            
-            try {
-              await publisher.publish({
-                title: `OrderKuota API - ${title}`,
-                content: content,
-                tags: ['api', 'documentation', 'orderkuota', 'nodejs']
-              });
-              console.log(`Published: ${title}`);
-            } catch (error) {
-              console.error(`Failed to publish ${title}:`, error);
-            }
-          }
-          EOF
-          
-          bun run publish-hashnode.js "$SOURCE_MARKDOWN_DIR"
+          echo "🚀 Publishing documentation to Hashnode..."
+          bun run publish-hashnode.js
