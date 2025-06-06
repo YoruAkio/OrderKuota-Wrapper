@@ -1,7 +1,0 @@
-{
-  "entryPoints": ["./src/index.ts"],
-  "out": "generated-temp/github-pages-html",
-  "excludeExternals": true,
-  "excludePrivate": true,
-  "excludeProtected": true
-}
