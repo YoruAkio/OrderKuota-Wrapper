@@ -11,6 +11,9 @@ jobs:
   # Job 1: Build and Deploy HTML Documentation to GitHub Pages
   deploy-gh-pages:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     # Permissions required for GitHub Pages deployment
     permissions:
       contents: write # To write to the gh-pages branch (if used by deploy-pages)
@@ -130,12 +133,27 @@ jobs:
           fi
 
           # Remove all existing files on the doc-hashnode branch to ensure a clean update
-          git rm -rf .
+          git rm -rf . 2>/dev/null || true
+
+          # Remove unnecessary files and directories for hashnode docs
+          rm -rf node_modules bun.lockb package-lock.json yarn.lock .git .github src dist generated-temp example typedoc.json typedoc.html.json tsconfig.json LICENSE *.tgz 2>/dev/null || true
 
           # Create the desired nested directory structure: docs/api-reference
           mkdir -p docs/api-reference
           # Copy the *contents* of the generated markdown into docs/api-reference
           cp -R "$SOURCE_MARKDOWN_DIR"/* docs/api-reference/
+
+          # Create a simple README for the hashnode docs branch
+          cat > README.md << 'EOF'
+# Documentation Branch for Hashnode
+
+This branch contains auto-generated markdown documentation for Hashnode.
+
+The documentation is automatically updated when changes are pushed to the main branch.
+
+## Structure
+- `docs/api-reference/` - Contains the API reference documentation in markdown format
+EOF
 
           # Stage all changes (add new files, register deletions)
           git add .
