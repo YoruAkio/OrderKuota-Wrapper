@@ -1,0 +1,11 @@
+// typedoc.json (This will be used for Hashnode/Markdown output)
+{
+  "entryPoints": ["./src/index.ts"],
+  "out": "generated-temp/hashnode-markdown", // Temporary output folder for Hashnode docs
+  "plugin": ["typedoc-plugin-markdown"],
+  "theme": "markdown",
+  "excludeExternals": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "entryDocument": "README.md"
+}
