@@ -1,6 +1,6 @@
 {
   "name": "orderkuota",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "OrderKuota API wrapper for Node.js",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc",
     "prepare": "npm run build",
-    "publish-package": "npm run build && npm pack && npm publish",
+    "package:publish": "npm run build && npm pack && npm publish",
     "docs:generate": "npm run typedoc --out docs"
   },
   "license": "MIT",
