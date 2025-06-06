@@ -5,160 +5,153 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Allows manual triggering from the GitHub UI
+  workflow_dispatch:
 
 jobs:
-  # Job 1: Build and Deploy HTML Documentation to GitHub Pages
   deploy-gh-pages:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    # Permissions required for GitHub Pages deployment
     permissions:
-      contents: read
-      pages: write
-      id-token: write
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1 # Use v1 for compatibility, or test with v2 if available
+        uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
       - name: Install dependencies
         run: bun install
 
-      - name: Generate HTML documentation for GitHub Pages
-        # This will output to './generated-temp/github-pages-html'
+      - name: Generate HTML documentation
         run: bun run docs:generate:html
 
-      - name: Prepare 'docs' directory for GitHub Pages
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Deploy to gh-pages branch
         run: |
           SOURCE_HTML_DIR="generated-temp/github-pages-html"
-          TARGET_HTML_DIR="docs" # Desired final output for GitHub Pages
-
-          # Ensure the temporary generated directory exists
+          TARGET_BRANCH="gh-pages"
+          
           if [ ! -d "$SOURCE_HTML_DIR" ] || [ -z "$(ls -A $SOURCE_HTML_DIR)" ]; then
             echo "Error: TypeDoc HTML output directory '$SOURCE_HTML_DIR' not found or is empty."
             exit 1
           fi
+          
+          if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+            git fetch origin "$TARGET_BRANCH"
+            git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+          else
+            git checkout --orphan "$TARGET_BRANCH"
+          fi
+          
+          git rm -rf . 2>/dev/null || true
+          cp -R "$SOURCE_HTML_DIR"/* .
+          git add .
+          git commit -m "Deploy documentation to gh-pages" || echo "No changes to commit"
+          git push origin "$TARGET_BRANCH" --force
 
-          # Create the final 'docs' directory if it doesn't exist
-          mkdir -p "$TARGET_HTML_DIR"
-          # Copy the *contents* of the generated HTML docs into the 'docs' directory
-          cp -R "$SOURCE_HTML_DIR"/* "$TARGET_HTML_DIR"/
-
-      - name: Setup GitHub Pages
-        # Configures the GitHub Pages environment
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact for GitHub Pages
-        # Uploads the prepared 'docs' directory to GitHub Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          # This path MUST match the 'TARGET_HTML_DIR' from the previous step
-          path: './docs'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-        # This condition ensures deployment only happens on pushes to 'main'
-        if: github.ref == 'refs/heads/main'
-
-
-  # Job 2: Build and Deploy Markdown Documentation to Hashnode Docs
   deploy-hashnode-docs:
     runs-on: ubuntu-latest
-    # Permissions required for pushing to a custom branch (doc-hashnode)
     permissions:
-      contents: write # To push files to the doc-hashnode branch
+      contents: write
 
     steps:
-      - name: Checkout repository for Hashnode docs
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # persist-credentials and fetch-depth are crucial for pushing to a different branch
-          persist-credentials: false
-          fetch-depth: 0 # Fetch all history for proper branch manipulation
+          fetch-depth: 0
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1 # Use v1 for compatibility, or test with v2 if available
+        uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
       - name: Install dependencies
         run: bun install
 
-      - name: Generate Markdown documentation for Hashnode
-        # This will output to './generated-temp/hashnode-markdown'
+      - name: Generate Markdown documentation
         run: bun run docs:generate:markdown
 
-      - name: Configure Git for Push
+      - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Use the GITHUB_TOKEN for authentication when pushing
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
 
-      - name: Commit and Push Documentation to doc-hashnode branch
-        env:
-          TARGET_BRANCH: doc-hashnode
-          SOURCE_MARKDOWN_DIR: generated-temp/hashnode-markdown # Source of generated markdown
-
+      - name: Deploy to doc-hashnode branch
         run: |
-          # Store the current branch to return to it later (for safety)
-          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-
-          # Basic check to ensure the generated directory exists and is not empty
+          SOURCE_MARKDOWN_DIR="generated-temp/hashnode-markdown"
+          TARGET_BRANCH="doc-hashnode"
+          
           if [ ! -d "$SOURCE_MARKDOWN_DIR" ] || [ -z "$(ls -A $SOURCE_MARKDOWN_DIR)" ]; then
             echo "Error: TypeDoc Markdown output directory '$SOURCE_MARKDOWN_DIR' not found or is empty."
             exit 1
           fi
-
-          # Create or switch to the target branch (doc-hashnode)
+          
           if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
-            # Branch exists on remote, fetch and checkout
             git fetch origin "$TARGET_BRANCH"
             git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
-          elif git show-ref --verify --quiet "refs/heads/$TARGET_BRANCH"; then
-            # Branch exists locally, checkout
-            git checkout "$TARGET_BRANCH"
           else
-            # Branch doesn't exist, create orphan branch
             git checkout --orphan "$TARGET_BRANCH"
           fi
-
-          # Remove all existing files on the doc-hashnode branch to ensure a clean update
+          
           git rm -rf . 2>/dev/null || true
-
-          # Copy only the generated markdown documentation
           cp -R "$SOURCE_MARKDOWN_DIR"/* .
-
-          # Create a simple README for the hashnode docs branch
+          
           cat > README.md << 'EOF'
           # Documentation Branch for Hashnode
           
           This branch contains auto-generated markdown documentation for Hashnode.
-          
-          The documentation is automatically updated when changes are pushed to the main branch.
-          
-          Generated from the main branch using TypeDoc.
           EOF
-
-          # Stage all changes (add new files, register deletions)
+          
           git add .
-
-          # Commit the changes. '|| echo' prevents the step from failing if no changes are detected.
-          git commit -m "Docs: Auto-generated Hashnode documentation update" || echo "No changes to commit to $TARGET_BRANCH branch."
-
-          # Push the changes to the doc-hashnode branch.
-          # --force is often desired for generated content branches as it ensures the branch
-          # always reflects the latest generated state, overwriting older history.
+          git commit -m "Update Hashnode documentation" || echo "No changes to commit"
           git push origin "$TARGET_BRANCH" --force
 
-          # Switch back to the original branch (optional, but good practice)
-          git checkout "$CURRENT_BRANCH" || true # '|| true' to prevent script failure if CURRENT_BRANCH is a detached HEAD
+      - name: Install hashnode-publish
+        run: bun add hashnode-publish
+
+      - name: Publish to Hashnode
+        env:
+          HASHNODE_PAT: ${{ secrets.HASHNODE_PAT }}
+        run: |
+          SOURCE_MARKDOWN_DIR="generated-temp/hashnode-markdown"
+          
+          # Create a simple publish script
+          cat > publish-hashnode.js << 'EOF'
+          import { HashnodePublisher } from 'hashnode-publish';
+          import { readFileSync, readdirSync } from 'fs';
+          import { join } from 'path';
+          
+          const publisher = new HashnodePublisher({
+            token: process.env.HASHNODE_PAT
+          });
+          
+          const docsDir = process.argv[2] || 'generated-temp/hashnode-markdown';
+          const files = readdirSync(docsDir).filter(f => f.endsWith('.md'));
+          
+          for (const file of files) {
+            const content = readFileSync(join(docsDir, file), 'utf8');
+            const title = file.replace('.md', '').replace(/-/g, ' ');
+            
+            try {
+              await publisher.publish({
+                title: `OrderKuota API - ${title}`,
+                content: content,
+                tags: ['api', 'documentation', 'orderkuota', 'nodejs']
+              });
+              console.log(`Published: ${title}`);
+            } catch (error) {
+              console.error(`Failed to publish ${title}:`, error);
+            }
+          }
+          EOF
+          
+          bun run publish-hashnode.js "$SOURCE_MARKDOWN_DIR"
