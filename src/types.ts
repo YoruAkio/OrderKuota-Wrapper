@@ -13,6 +13,8 @@ export interface OrderKuotaConfig {
     password: string;
     /** API key for gateway access */
     apikey: string;
+    /** Base QRIS string for generating payment QR codes (optional, required only for QRIS generation) */
+    baseQrString?: string;
 }
 
 /**
@@ -118,6 +120,13 @@ export type OrderKuotaErrorCode =
     | 'QRIS_FETCH_FAILED'
     | 'VA_FETCH_FAILED'
     | 'RETAIL_FETCH_FAILED'
+    | 'QRIS_GENERATION_FAILED'
+    | 'INVALID_AMOUNT'
+    | 'INVALID_QRIS_FORMAT'
+    | 'MISSING_BASE_QR_STRING'
+    | 'CRC_CALCULATION_FAILED'
+    | 'INVALID_QRIS_STRING'
+    | 'QR_GENERATION_FAILED'
     | 'UNKNOWN_ERROR';
 
 /**
