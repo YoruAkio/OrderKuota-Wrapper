@@ -6,6 +6,5 @@
   "theme": "markdown",
   "excludeExternals": true,
   "excludePrivate": true,
-  "excludeProtected": true,
-  "entryDocument": "README.md"
+  "excludeProtected": true
 }
