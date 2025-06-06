@@ -56,4 +56,4 @@ jobs:
           cp -r /tmp/docs-backup/* .
           git add .
           git commit -m "Deploy documentation [skip ci]"
-          git push --force --set-
+          git push --force --set-upstream origin gh-pages
