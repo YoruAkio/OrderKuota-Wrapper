@@ -31,7 +31,7 @@ jobs:
         run: rm -rf docs && mkdir -p docs
 
       - name: Generate TypeDoc documentation
-        run: bun run typedoc --out docs src
+        run: bun run docs:generate
 
       - name: Copy README to docs
         run: cp README.md docs/
@@ -43,6 +43,9 @@ jobs:
 
       - name: Deploy to GitHub Pages
         run: |
-          git add docs
-          git commit -m "Update documentation [skip ci]" || exit 0
-          git subtree push
+          git checkout --orphan gh-pages
+          git rm -rf . --quiet
+          git clean -fxd
+          cp -r docs/* .
+          git add .
+          git commit -m "Deploy documentation [skip ci]"
