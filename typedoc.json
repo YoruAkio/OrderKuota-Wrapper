@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "name": "OrderKuota-Wrapper",
+  "includeVersion": true,
+  "exclude": ["**/node_modules/**", "**/dist/**"],
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "disableSources": true,
+  "hideGenerator": true,
+  "readme": "README.md",
+  "plugin": ["typedoc-plugin-markdown"],
+  "theme": "default"
+}

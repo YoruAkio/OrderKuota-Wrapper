@@ -1,0 +1,38 @@
+# Source files
+src/
+*.ts
+
+# Examples and documentation
+example/
+.github/
+
+# Configuration files
+tsconfig.json
+
+# Lock files
+bun.lockb
+package-lock.json
+
+# Development files
+.gitignore
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing and coverage
+coverage/
+.nyc_output/
+
+# Build artifacts (keep dist/)
+# dist/ should be published
+
+# Temporary files
+*.tmp
+*.temp
