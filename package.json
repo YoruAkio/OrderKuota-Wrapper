@@ -11,8 +11,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "prepare": "bun run build",
-    "package:publish": "bun run build && bun pack && bun publish",
+    "prepare": "npm run build",
+    "package:publish": "npm run build && npm pack && npm publish",
     "docs:generate": "typedoc --out docs"
   },
   "license": "MIT",
