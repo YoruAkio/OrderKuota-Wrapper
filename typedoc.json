@@ -11,6 +11,6 @@
   "disableSources": true,
   "hideGenerator": true,
   "readme": "README.md",
-  "plugin": ["typedoc-plugin-markdown"],
-  "theme": "default"
+  "theme": "default",
+  "cname": false
 }
