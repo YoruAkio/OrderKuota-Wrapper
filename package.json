@@ -29,7 +29,9 @@
     "wrapper",
     "typescript",
     "qris",
-    "qrid-payment"
+    "qris-payment",
+    "indonesian-payment",
+    "payment-gateway"
   ],
   "devDependencies": {
     "@types/bun": "latest",
@@ -39,8 +41,10 @@
   },
   "dependencies": {
     "@types/qrcode": "^1.5.5",
+    "@types/qs": "^6.14.0",
     "axios": "^1.7.9",
     "qrcode": "^1.5.4",
+    "qs": "^6.14.0",
     "typedoc": "^0.28.5"
   },
   "private": false

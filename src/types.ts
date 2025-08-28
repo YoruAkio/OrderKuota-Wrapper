@@ -1,156 +1,176 @@
 /**
- * Configuration interface for OrderKuota class initialization
- * All fields are required for proper authentication
+ * Configuration for initializing OrderKuota client
  */
 export interface OrderKuotaConfig {
-    /** Username for authentication */
-    username: string;
-    /** PIN for authentication (numeric string) */
-    pin: string;
-    /** User ID for API calls */
-    userid: string;
-    /** Password for authentication */
-    password: string;
-    /** API key for gateway access */
-    apikey: string;
-    /** Base QRIS string for generating payment QR codes (optional, required only for QRIS generation) */
-    baseQrString?: string;
+  /** Username for authentication */
+  username: string;
+  /** Password for authentication */
+  password: string;
+  /** Authentication token (optional, obtained via getToken) */
+  token?: string;
+  /** Base QRIS string for payment QR codes (optional) */
+  baseQrString?: string;
 }
 
 /**
- * Response interface for balance check
+ * Response from OTP request
  */
-export interface BalanceResponse {
-    /** Status of the request - true if successful */
-    status: boolean;
-    /** Response message from the API */
-    message: string;
-    /** Current balance amount in IDR */
-    balance: number;
+export interface OTPResponse {
+  /** Request status */
+  status: string;
+  /** Email where OTP was sent */
+  email: string;
+  /** Response message */
+  message: string;
 }
 
 /**
- * Base transaction interface
+ * Response from token authentication
  */
-export interface BaseTransaction {
-    /** Unique transaction ID */
-    id: string;
-    /** Transaction amount in IDR */
-    amount: number;
-    /** Transaction date in ISO format */
-    date: string;
-    /** Transaction status (success, pending, failed, etc.) */
-    status: string;
-    /** Optional transaction description */
-    description?: string;
+export interface TokenResponse {
+  /** Request status */
+  status: string;
+  /** Authentication token */
+  token?: string;
+  /** User ID */
+  id?: string;
+  /** User display name */
+  name?: string;
+  /** Username */
+  username?: string;
+  /** Account balance */
+  balance?: string;
+  /** Response message */
+  message: string;
 }
 
 /**
- * QRIS transaction interface
+ * QRIS transaction data
  */
-export interface QrisTransaction extends BaseTransaction {
-    /** QRIS specific data */
-    qris_data?: {
-        /** Merchant name for the transaction */
-        merchant_name?: string;
-        /** Terminal ID used for the transaction */
-        terminal_id?: string;
-    };
+export interface QrisTransaction {
+  /** Transaction ID */
+  id?: string;
+  /** Amount in IDR */
+  amount?: number;
+  /** Transaction date */
+  date?: string;
+  /** Transaction status */
+  status?: string;
+  /** Description */
+  description?: string;
+  /** Additional data */
+  [key: string]: any;
 }
 
 /**
- * Virtual Account transaction interface
+ * QRIS menu item
  */
-export interface VirtualAccountTransaction extends BaseTransaction {
-    /** Virtual account number */
-    va_number?: string;
-    /** Bank code (e.g., BCA, BNI, BRI, etc.) */
-    bank_code?: string;
+export interface QrisMenuItem {
+  /** Item ID */
+  id?: string;
+  /** Item name */
+  name?: string;
+  /** Item description */
+  description?: string;
+  /** Additional data */
+  [key: string]: any;
 }
 
 /**
- * Retail transaction interface
+ * QRIS menu response
  */
-export interface RetailTransaction extends BaseTransaction {
-    /** Product code for the transaction */
-    product_code?: string;
-    /** Target number (phone, account, etc.) */
-    target?: string;
+export interface QrisMenuResponse {
+  /** Response status */
+  status: string;
+  /** Menu items */
+  data?: QrisMenuItem[];
+  /** Response message */
+  message: string;
 }
 
 /**
- * Generic API response wrapper
+ * QRIS Ajaib payment response
+ */
+export interface QrisAjaibResponse {
+  /** Response status */
+  status: string;
+  /** QRIS payment data */
+  data?: {
+    /** QR code string */
+    qr_string?: string;
+    /** Additional data */
+    [key: string]: any;
+  };
+  /** Response message */
+  message: string;
+}
+
+/**
+ * Options for fetching transaction history
+ */
+export interface HistoryOptions {
+  /** Page number */
+  page?: string;
+  /** Description filter */
+  keterangan?: string;
+  /** Amount filter */
+  jumlah?: string;
+  /** Start date */
+  dari_tanggal?: string;
+  /** End date */
+  ke_tanggal?: string;
+}
+
+/**
+ * Generic API response
  */
 export interface ApiResponse<T = any> {
-    /** Response status - true if successful */
-    status: boolean;
-    /** Response message */
-    message: string;
-    /** Response data payload */
-    data?: T;
-    /** Error details if any */
-    error?: string;
+  /** Success status */
+  success?: boolean;
+  /** Response message */
+  message?: string;
+  /** Response data */
+  results?: T;
+  /** Additional data */
+  [key: string]: any;
 }
 
 /**
- * QRIS history response
+ * Error codes for OrderKuota operations
  */
-export interface QrisHistoryResponse extends ApiResponse<QrisTransaction[]> {}
+export type OrderKuotaErrorCode =
+  | "MISSING_CONFIG"
+  | "API_ERROR"
+  | "EMPTY_RESPONSE"
+  | "INVALID_RESPONSE"
+  | "NETWORK_ERROR"
+  | "INVALID_AMOUNT"
+  | "INVALID_CREDENTIALS"
+  | "QR_GENERATION_FAILED"
+  | "UNKNOWN_ERROR";
 
 /**
- * Virtual Account history response
- */
-export interface VirtualAccountHistoryResponse extends ApiResponse<VirtualAccountTransaction[]> {}
-
-/**
- * Retail history response
- */
-export interface RetailHistoryResponse extends ApiResponse<RetailTransaction[]> {}
-
-/**
- * Error codes that can be returned by OrderKuota operations
- */
-export type OrderKuotaErrorCode = 
-    | 'MISSING_CONFIG'
-    | 'BALANCE_CHECK_FAILED'
-    | 'API_ERROR'
-    | 'EMPTY_RESPONSE'
-    | 'INVALID_RESPONSE'
-    | 'NETWORK_ERROR'
-    | 'QRIS_FETCH_FAILED'
-    | 'VA_FETCH_FAILED'
-    | 'RETAIL_FETCH_FAILED'
-    | 'QRIS_GENERATION_FAILED'
-    | 'INVALID_AMOUNT'
-    | 'INVALID_QRIS_FORMAT'
-    | 'MISSING_BASE_QR_STRING'
-    | 'CRC_CALCULATION_FAILED'
-    | 'INVALID_QRIS_STRING'
-    | 'QR_GENERATION_FAILED'
-    | 'UNKNOWN_ERROR';
-
-/**
- * Custom error class for OrderKuota operations
+ * Custom error for OrderKuota operations
  */
 export class OrderKuotaError extends Error {
-    /** Error code for programmatic handling */
-    public readonly code: OrderKuotaErrorCode;
-    /** HTTP status code if applicable */
-    public readonly status?: number;
+  /** Error code */
+  public readonly code: OrderKuotaErrorCode;
+  /** HTTP status code */
+  public readonly status?: number;
 
-    constructor(
-        message: string,
-        code: OrderKuotaErrorCode = 'UNKNOWN_ERROR',
-        status?: number
-    ) {
-        super(message);
-        this.name = 'OrderKuotaError';
-        this.code = code;
-        this.status = status;
-        
-        // Maintains proper stack trace for where our error was thrown (V8 only)
-        if (Error.captureStackTrace) {
-            Error.captureStackTrace(this, OrderKuotaError);
-        }
+  constructor(
+    message: string,
+    code: OrderKuotaErrorCode = "UNKNOWN_ERROR",
+    status?: number,
+  ) {
+    super(message);
+    this.name = "OrderKuotaError";
+    this.code = code;
+    this.status = status;
+
+    // Maintain proper stack trace (V8 only)
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, OrderKuotaError);
     }
+  }
 }
